@@ -1,46 +1,58 @@
 
-#include "ArduinoMqttClient.h"
-#include <WiFiClientSecure.h>
 
-const char *SSID = "nepaldigisys";
-const char *PSWD = "NDS_0ffice";
-const char *broker = "broker.emqx.io";
-const uint16_t port = 1883;
-const char *topic = "nds/test";
+#include <WiFi.h>
+#include <MQTT.h>
 
-WiFiClientSecure wifi;
-MqttClient mqttclient(wifi);
+const char ssid[] = "nepaldigisys";
+const char pass[] = "NDS_0ffice";
 
-void connect_to_wifi()
-{
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(SSID, PSWD);
-  while(WL_CONNECTED != WiFi.status())
-  {
+WiFiClient net;
+MQTTClient MQTT_client;
+
+unsigned long lastMillis = 0;
+
+void connect() {
+  Serial.print("checking wifi...");
+  while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(1000);
   }
-  Serial.println(".");
-  Serial.print("Connected to ");
-  Serial.println(SSID);
-  Serial.print("Got IP ");
-  Serial.println(WiFi.localIP());
+
+  Serial.print("\nconnecting...");
+  while (!MQTT_client.connect("arduino", "", "")) {
+    Serial.print(".");
+    delay(1000);
+  }
+
+  Serial.println("\nMQTT connected!");
+
+  MQTT_client.subscribe("iot/test/topic_2");
+}
+
+void messageReceived(String &topic, String &payload) {
+  Serial.println("incoming: " + topic + " - " + payload);
 }
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(115200);
-  connect_to_wifi();
-  while(!mqttclient.connect(broker, port))
-  {
-    Serial.print("MQTT connection failed! Error code = ");
-    Serial.println(mqttclient.connectError());
-    delay(1000);
-  }
+  WiFi.begin(ssid, pass);
+
+  MQTT_client.begin("broker.emqx.io", net);
+  MQTT_client.onMessage(messageReceived);
+
+  connect();
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-  Serial.print(".");
-  delay(2000);
+  MQTT_client.loop();
+  delay(10); 
+
+  if (!MQTT_client.connected()) {
+    connect();
+  }
+
+  if (millis() - lastMillis > 1000) {
+    lastMillis = millis();
+    MQTT_client.publish("iot/test/topic_1", "world");
+  }
 }
